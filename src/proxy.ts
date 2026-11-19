@@ -2,6 +2,17 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getToken } from "next-auth/jwt";
 
+// Roles allowed into the bookkeeper dashboard and onboarding application.
+// Keep in sync with the role names issued by the backend.
+const DASHBOARD_ROLES = new Set(["BOOKKEEPER", "ADMIN"]);
+const PROTECTED_PREFIXES = ["/dashboard", "/apply"];
+
+function isProtectedPath(pathname: string) {
+  return PROTECTED_PREFIXES.some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+  );
+}
+
 export async function proxy(request: NextRequest) {
   const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
   const isDev = process.env.NODE_ENV !== "production";
@@ -28,14 +39,14 @@ export async function proxy(request: NextRequest) {
 
   let response: NextResponse;
   const { pathname } = request.nextUrl;
-  if (pathname === "/dashboard" || pathname.startsWith("/dashboard/")) {
+  if (isProtectedPath(pathname)) {
     const token = await getToken({ req: request });
     if (!token || token.error === "RefreshAccessTokenError") {
       const callbackUrl = encodeURIComponent(pathname);
       response = NextResponse.redirect(
         new URL(`/login?callbackUrl=${callbackUrl}`, request.url),
       );
-    } else if (token.role?.toUpperCase() !== "ADMIN") {
+    } else if (!DASHBOARD_ROLES.has(token.role?.toUpperCase() ?? "")) {
       response = NextResponse.redirect(new URL("/", request.url));
     } else {
       response = NextResponse.next({ request: { headers: requestHeaders } });

@@ -55,7 +55,7 @@ it("uses the existing credentials provider and rejects an external redirect", as
   render(<LoginForm callbackUrl="https://evil.example" />);
   fillLogin();
   fireEvent.click(screen.getByRole("button", { name: "Log In" }));
-  await waitFor(() => expect(replace).toHaveBeenCalledWith("/"));
+  await waitFor(() => expect(replace).toHaveBeenCalledWith("/dashboard"));
   expect(signIn).toHaveBeenCalledWith(
     "credentials",
     expect.objectContaining({
@@ -93,7 +93,7 @@ it("rejects a callback whose path becomes a protocol-relative redirect", async (
   render(<LoginForm callbackUrl={`${window.location.origin}//evil.example`} />);
   fillLogin();
   fireEvent.click(screen.getByRole("button", { name: "Log In" }));
-  await waitFor(() => expect(replace).toHaveBeenCalledWith("/"));
+  await waitFor(() => expect(replace).toHaveBeenCalledWith("/dashboard"));
 });
 
 it("preserves a local callback and remembers only the opted-in email", async () => {

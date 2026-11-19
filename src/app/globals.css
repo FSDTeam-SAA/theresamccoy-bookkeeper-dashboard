@@ -42,6 +42,28 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+
+  /* Bookkeepers Marketplace brand tokens (Figma: Foundation / Deep Teal etc.) */
+  --font-onest: var(--font-onest-face), sans-serif;
+  --font-wix: var(--font-wix-face), var(--font-onest-face), sans-serif;
+  --font-instrument: var(--font-instrument-face), sans-serif;
+  --color-brand-900: #063231;
+  --color-brand-800: #0b4a47;
+  --color-brand-400: #3c6e6c;
+  --color-brand-300: #b4c8c6;
+  --color-brand-200: #8facaa;
+  --color-brand-100: #d8e4e2;
+  --color-brand-50: #e7eded;
+  --color-mist: #f7faf9;
+  --color-mist-50: #fefffe;
+  --color-muted-text: #5f7275;
+  --color-ink: #212121;
+  --color-ink-400: #4d4d4d;
+  --color-grey-200: #929292;
+  --color-grey-300: #616161;
+  --color-field-border: #c0c3c1;
+  --color-alert: #c2410c;
+  --color-success: #10b981;
 }
 
 :root {

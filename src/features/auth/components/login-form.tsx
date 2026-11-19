@@ -66,7 +66,7 @@ export function LoginForm({ callbackUrl }: { callbackUrl?: string }) {
         /* Storage preferences must not block a successful login. */
       }
 
-      let destination = "/";
+      let destination = "/dashboard";
       if (callbackUrl) {
         try {
           const url = new URL(callbackUrl, window.location.origin);
