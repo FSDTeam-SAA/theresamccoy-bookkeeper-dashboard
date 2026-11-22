@@ -21,13 +21,17 @@ export const dashboardNavItems: DashboardNavItem[] = [
     href: "/dashboard/application",
     icon: icon("application"),
   },
-  { label: "Courses", icon: icon("courses") },
-  { label: "Certificates", icon: icon("certificates") },
-  { label: "Engagement", icon: icon("engagement") },
-  { label: "Requests", icon: icon("requests") },
-  { label: "Messages", icon: icon("messages") },
-  { label: "Reviews", icon: icon("reviews") },
-  { label: "Settings", icon: icon("settings") },
+  { label: "Courses", href: "/dashboard/courses", icon: icon("courses") },
+  {
+    label: "Certificates",
+    href: "/dashboard/certificates",
+    icon: icon("certificates"),
+  },
+  { label: "Engagement", href: "/dashboard/engagement", icon: icon("engagement") },
+  { label: "Requests", href: "/dashboard/requests", icon: icon("requests") },
+  { label: "Messages", href: "/dashboard/messages", icon: icon("messages") },
+  { label: "Reviews", href: "/dashboard/reviews", icon: icon("reviews") },
+  { label: "Settings", href: "/dashboard/settings", icon: icon("settings") },
 ];
 
 export function isNavItemActive(pathname: string, href?: string) {
