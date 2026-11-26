@@ -2,30 +2,74 @@
 
 import { useEffect, useState } from "react";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { AuthHeading, FormNotice } from "./auth-fields";
 import styles from "../auth.module.css";
+import {
+  errorMessage,
+  readRecoveryState,
+  requestPasswordReset,
+  verifyResetCode,
+  writeRecoveryState,
+} from "../api/auth.api";
 
 const codeSchema = z.object({
   code: z.string().regex(/^\d{6}$/, "Enter the 6-digit verification code."),
 });
 
 export function VerifyEmailForm() {
+  const router = useRouter();
   const [message, setMessage] = useState("");
   const [remaining, setRemaining] = useState(59);
   const {
     register,
     control,
     handleSubmit,
-    formState: { errors },
+    formState: { errors, isSubmitting },
   } = useForm<z.infer<typeof codeSchema>>({
     resolver: zodResolver(codeSchema),
     defaultValues: { code: "" },
   });
   const code = useWatch({ control, name: "code" });
+
+  function recoveryEmail() {
+    const email = readRecoveryState()?.email;
+    if (!email)
+      setMessage(
+        "Your reset session has expired. Request a new code from Forgot Password.",
+      );
+    return email;
+  }
+
+  async function submit({ code: otp }: z.infer<typeof codeSchema>) {
+    setMessage("");
+    const email = recoveryEmail();
+    if (!email) return;
+    try {
+      const { resetToken } = await verifyResetCode(email, otp);
+      writeRecoveryState({ email, resetToken });
+      router.push("/reset-password");
+    } catch (error) {
+      setMessage(errorMessage(error));
+    }
+  }
+
+  async function resend() {
+    setMessage("");
+    const email = recoveryEmail();
+    if (!email) return;
+    try {
+      await requestPasswordReset(email);
+      setRemaining(59);
+      setMessage("A new code has been sent to your email.");
+    } catch (error) {
+      setMessage(errorMessage(error));
+    }
+  }
 
   useEffect(() => {
     const timer = window.setInterval(
@@ -39,11 +83,8 @@ export function VerifyEmailForm() {
     <form
       className={styles.form}
       noValidate
-      onSubmit={handleSubmit(() =>
-        setMessage(
-          "Email verification is not available yet. Please try again later.",
-        ),
-      )}
+      onSubmit={handleSubmit(submit)}
+      aria-busy={isSubmitting}
     >
       <AuthHeading title="Verify Email">
         Enter OTP to verify your email address
@@ -90,11 +131,7 @@ export function VerifyEmailForm() {
               type="button"
               className={styles.resend}
               disabled={remaining > 0}
-              onClick={() =>
-                setMessage(
-                  "Sending a new code is not available yet. Please try again later.",
-                )
-              }
+              onClick={resend}
             >
               Resend
             </button>
@@ -102,8 +139,8 @@ export function VerifyEmailForm() {
         </div>
       </div>
       <FormNotice message={message} />
-      <Button type="submit" className={styles.submit}>
-        Verify
+      <Button type="submit" className={styles.submit} disabled={isSubmitting}>
+        {isSubmitting ? "Verifying…" : "Verify"}
       </Button>
     </form>
   );

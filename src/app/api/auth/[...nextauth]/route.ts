@@ -4,28 +4,52 @@ import NextAuth from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { z } from "zod";
 import { getApiUrl } from "@/lib/api-url";
-import { refreshAccessToken } from "@/features/auth/api/refresh-token.api";
+import { authCookies } from "@/lib/auth-cookies";
+
+// Roles allowed to hold a session in this app (keep in sync with src/proxy.ts).
+const ALLOWED_ROLES = new Set(["bookkeeper", "admin"]);
 
 const credentialsSchema = z.object({
   email: z.string().trim().email().max(254),
   password: z.string().min(1).max(1024),
 });
+
+// Mirrors POST /api/v1/auth/login → { data: { accessToken, user } }.
+// The backend sends the refresh token only as an httpOnly cookie on its own
+// domain, so it is intentionally not read here.
 const loginResponseSchema = z.object({
   data: z.object({
     user: z
       .object({
         _id: z.string().min(1).optional(),
         id: z.string().min(1).optional(),
-        name: z.string(),
-        email: z.string().email(),
-        profileImage: z.string().nullish(),
+        firstName: z.string().nullish(),
+        lastName: z.string().nullish(),
+        // The API redacts contact fields from login responses, so email is
+        // usually absent; the submitted credentials email is used instead.
+        email: z.string().email().optional(),
+        profilePicture: z.string().nullish(),
         role: z.string().min(1),
-        refreshToken: z.string().min(1),
       })
       .refine((user) => Boolean(user._id || user.id)),
     accessToken: z.string().min(1),
   }),
 });
+
+const FALLBACK_TTL_MS = 60 * 60 * 1000;
+
+/** Reads the `exp` claim of the backend JWT (no verification; the backend verifies). */
+function getTokenExpiry(accessToken: string): number {
+  try {
+    const payload = JSON.parse(
+      Buffer.from(accessToken.split(".")[1] ?? "", "base64url").toString(),
+    ) as { exp?: unknown };
+    if (typeof payload.exp === "number") return payload.exp * 1000;
+  } catch {
+    // fall through
+  }
+  return Date.now() + FALLBACK_TTL_MS;
+}
 
 const handler = NextAuth({
   pages: { signIn: "/login" },
@@ -52,14 +76,17 @@ const handler = NextAuth({
           if (!res.ok) return null;
           const { data } = loginResponseSchema.parse(await res.json());
           const { user } = data;
+          if (!ALLOWED_ROLES.has(user.role)) return null;
+          const name =
+            [user.firstName, user.lastName].filter(Boolean).join(" ").trim() ||
+            parsed.data.email;
           return {
             id: (user._id || user.id)!,
-            name: user.name,
-            email: user.email,
-            image: user.profileImage ?? "",
+            name,
+            email: user.email ?? parsed.data.email,
+            image: user.profilePicture ?? "",
             role: user.role,
             token: data.accessToken,
-            refreshToken: user.refreshToken,
           };
         } catch {
           return null;
@@ -84,39 +111,20 @@ const handler = NextAuth({
           image: user.image,
           role: user.role,
           accessToken: user.token,
-          refreshToken: user.refreshToken,
-          accessTokenExpires: Date.now() + 60 * 60 * 1000, // Default 1 hour expiry
+          accessTokenExpires: getTokenExpiry(user.token),
+          error: undefined,
         };
       }
 
       // Identity and permissions come only from the authenticated backend.
       // Client-supplied session updates must never overwrite signed claims.
-      // Return previous token if the access token has not expired yet
       if (Date.now() < token.accessTokenExpires) {
         return token;
       }
 
-      // Access token has expired, try to update it
-      try {
-        const refreshedTokens = await refreshAccessToken(token.refreshToken);
-
-        if (!refreshedTokens.status) {
-          throw refreshedTokens;
-        }
-
-        return {
-          ...token,
-          accessToken: refreshedTokens.data.accessToken,
-          error: undefined,
-          accessTokenExpires: Date.now() + 60 * 60 * 1000, // Update expiration
-          refreshToken: refreshedTokens.data.refreshToken || token.refreshToken, // Fallback to old refresh token
-        };
-      } catch {
-        return {
-          ...token,
-          error: "RefreshAccessTokenError",
-        };
-      }
+      // No refresh flow yet: an expired backend token ends the session. The
+      // existing error flag makes the proxy and API client sign the user out.
+      return { ...token, accessToken: "", error: "RefreshAccessTokenError" };
     },
 
     async session({ session, token }) {
@@ -137,6 +145,7 @@ const handler = NextAuth({
   },
 
   useSecureCookies: process.env.NODE_ENV === "production",
+  cookies: authCookies,
   secret: process.env.NEXTAUTH_SECRET,
 });
 

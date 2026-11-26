@@ -7,14 +7,16 @@ import { VerifyEmailForm } from "./verify-email-form";
 
 const replace = jest.fn();
 const refresh = jest.fn();
+const push = jest.fn();
 jest.mock("next/navigation", () => ({
-  useRouter: () => ({ replace, refresh }),
+  useRouter: () => ({ replace, refresh, push }),
 }));
 jest.mock("next-auth/react", () => ({ signIn: jest.fn() }));
 
 beforeEach(() => {
   jest.clearAllMocks();
   localStorage.clear();
+  sessionStorage.clear();
 });
 
 function fillLogin() {
@@ -116,10 +118,44 @@ it("accepts a pasted complete OTP and does not pretend verification succeeded", 
     target: { value: "123456" },
   });
   fireEvent.click(screen.getByRole("button", { name: "Verify" }));
+  // Without a recovery session there is nothing to verify against.
   expect(await screen.findByRole("alert")).toHaveTextContent(
-    "Email verification is not available yet",
+    "Your reset session has expired",
   );
-  expect(replace).not.toHaveBeenCalled();
+  expect(push).not.toHaveBeenCalled();
+});
+
+it("verifies the OTP with the backend and continues to the reset step", async () => {
+  process.env.NEXT_PUBLIC_API_URL = "http://localhost:5001/api/v1";
+  sessionStorage.setItem(
+    "password-recovery",
+    JSON.stringify({ email: "hello@example.com" }),
+  );
+  global.fetch = jest.fn().mockResolvedValue({
+    ok: true,
+    status: 200,
+    json: async () => ({
+      success: true,
+      data: { resetToken: "reset-token", expiresInSeconds: 600 },
+    }),
+  });
+  render(<VerifyEmailForm />);
+  fireEvent.change(screen.getByLabelText("Verification code"), {
+    target: { value: "123456" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Verify" }));
+  await waitFor(() => expect(push).toHaveBeenCalledWith("/reset-password"));
+  expect(fetch).toHaveBeenCalledWith(
+    "http://localhost:5001/api/v1/auth/verify",
+    expect.objectContaining({
+      method: "POST",
+      body: JSON.stringify({ email: "hello@example.com", otp: "123456" }),
+    }),
+  );
+  expect(JSON.parse(sessionStorage.getItem("password-recovery")!)).toEqual({
+    email: "hello@example.com",
+    resetToken: "reset-token",
+  });
 });
 
 it("rejects mismatched passwords without reporting a successful change", async () => {

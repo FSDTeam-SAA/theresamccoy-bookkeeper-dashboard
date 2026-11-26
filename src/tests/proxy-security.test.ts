@@ -55,7 +55,10 @@ test("regular users cannot access dashboard pages", async () => {
   const response = await proxy(
     new NextRequest("https://app.example.com/dashboard/settings"),
   );
-  expect(response.headers.get("location")).toBe("https://app.example.com/");
+  // Must not redirect to "/" (which bounces back to /dashboard and loops).
+  expect(response.headers.get("location")).toBe(
+    "https://app.example.com/login?error=AccessDenied",
+  );
 });
 
 test("admins retain dashboard access", async () => {
@@ -69,14 +72,18 @@ test("admins retain dashboard access", async () => {
 test("bookkeepers can access the dashboard and onboarding application", async () => {
   mockedGetToken.mockResolvedValue({ ...token, role: "BOOKKEEPER" });
   for (const path of ["/dashboard", "/dashboard/application", "/apply"]) {
-    const response = await proxy(new NextRequest(`https://app.example.com${path}`));
+    const response = await proxy(
+      new NextRequest(`https://app.example.com${path}`),
+    );
     expect(response.headers.get("x-middleware-next")).toBe("1");
   }
 });
 
 test("guests cannot open the onboarding application", async () => {
   mockedGetToken.mockResolvedValue(null);
-  const response = await proxy(new NextRequest("https://app.example.com/apply"));
+  const response = await proxy(
+    new NextRequest("https://app.example.com/apply"),
+  );
   expect(response.headers.get("location")).toBe(
     "https://app.example.com/login?callbackUrl=%2Fapply",
   );

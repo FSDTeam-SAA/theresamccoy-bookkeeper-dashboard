@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getToken } from "next-auth/jwt";
+import { SESSION_COOKIE } from "@/lib/auth-cookies";
 
 // Roles allowed into the bookkeeper dashboard and onboarding application.
 // Keep in sync with the role names issued by the backend.
@@ -40,14 +41,17 @@ export async function proxy(request: NextRequest) {
   let response: NextResponse;
   const { pathname } = request.nextUrl;
   if (isProtectedPath(pathname)) {
-    const token = await getToken({ req: request });
+    const token = await getToken({ req: request, cookieName: SESSION_COOKIE });
     if (!token || token.error === "RefreshAccessTokenError") {
       const callbackUrl = encodeURIComponent(pathname);
       response = NextResponse.redirect(
         new URL(`/login?callbackUrl=${callbackUrl}`, request.url),
       );
     } else if (!DASHBOARD_ROLES.has(token.role?.toUpperCase() ?? "")) {
-      response = NextResponse.redirect(new URL("/", request.url));
+      // "/" redirects back into /dashboard, so send wrong roles to login instead.
+      response = NextResponse.redirect(
+        new URL("/login?error=AccessDenied", request.url),
+      );
     } else {
       response = NextResponse.next({ request: { headers: requestHeaders } });
     }

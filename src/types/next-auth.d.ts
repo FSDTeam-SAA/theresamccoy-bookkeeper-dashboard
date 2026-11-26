@@ -21,7 +21,6 @@ declare module "next-auth" {
     image: string;
     role: "admin" | "user" | string;
     token: string;
-    refreshToken: string;
   }
 }
 
@@ -33,7 +32,6 @@ declare module "next-auth/jwt" {
     image: string;
     role: "admin" | "user" | string;
     accessToken: string;
-    refreshToken: string;
     accessTokenExpires: number;
     error?: "RefreshAccessTokenError";
   }
